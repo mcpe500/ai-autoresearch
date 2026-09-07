@@ -1,6 +1,6 @@
-// src/server.js - Universal Zero-Dependency HTTP & SSE Server via node:http
+// src/server.js - Universal HTTP & SSE Server with Proxy-Safe Streaming and Log Polling
 import { createServer } from 'node:http';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { config } from './config.js';
 import { db } from './db.js';
@@ -14,7 +14,7 @@ export function startServer(port = 8000, host = '0.0.0.0') {
     const url = new URL(req.url, `http://${req.headers.host}`);
     const pathname = url.pathname;
 
-    // CORS Headers
+    // CORS & Anti-Buffering Headers
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -25,6 +25,15 @@ export function startServer(port = 8000, host = '0.0.0.0') {
       return;
     }
 
+    // Helper for JSON responses
+    const sendJson = (data, statusCode = 200) => {
+      res.writeHead(statusCode, {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache',
+      });
+      res.end(JSON.stringify(data));
+    };
+
     // 1. Serve Dashboard HTML
     if (pathname === '/' || pathname === '/index.html') {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -32,23 +41,25 @@ export function startServer(port = 8000, host = '0.0.0.0') {
       return;
     }
 
-    // 2. Server-Sent Events (SSE) Live Stream
+    // 2. Anti-Buffering Server-Sent Events (SSE) Live Stream
     if (pathname === '/api/events') {
       res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
         'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no', // Critical: prevents Cloudflare & Nginx from buffering SSE!
       });
+      res.flushHeaders?.();
       res.write(': connected\n\n');
 
       const unsubscribe = runner.subscribe((payload) => {
         res.write(`data: ${JSON.stringify(payload)}\n\n`);
       });
 
-      // Keep alive heartbeat every 15s
+      // Keep alive heartbeat every 10s
       const ping = setInterval(() => {
         res.write(': ping\n\n');
-      }, 15000);
+      }, 10000);
 
       req.on('close', () => {
         clearInterval(ping);
@@ -57,17 +68,35 @@ export function startServer(port = 8000, host = '0.0.0.0') {
       return;
     }
 
-    // Helper for JSON responses
-    const sendJson = (data, statusCode = 200) => {
-      res.writeHead(statusCode, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(data));
-    };
+    // 3. Polling Fallback Logs API: /api/logs?since=<id>
+    if (pathname === '/api/logs' && req.method === 'GET') {
+      const sinceId = parseInt(url.searchParams.get('since') || '0', 10);
+      sendJson({
+        logs: runner.getLogs(sinceId),
+        status: runner.status,
+        current_stage: runner.currentStage,
+        current_stage_name: runner.currentStageName,
+        current_action: runner.currentAction,
+        stage_elapsed_sec: runner.getStageElapsed(),
+        iteration: runner.currentIteration,
+        active_hypothesis: runner.activeHypothesis,
+        active_rationale: runner.activeRationale,
+        accumulated_thinking: runner.accumulatedThinking,
+        accumulated_code: runner.accumulatedCode,
+      });
+      return;
+    }
 
-    // 3. Status API
+    // 4. Status API
     if (pathname === '/api/status' && req.method === 'GET') {
       sendJson({
         status: runner.status,
         iteration: runner.currentIteration,
+        current_stage: runner.currentStage,
+        current_stage_name: runner.currentStageName,
+        current_action: runner.currentAction,
+        stage_elapsed_sec: runner.getStageElapsed(),
+        active_hypothesis: runner.activeHypothesis,
         best_pareto_score: runner.bestScore,
         best_bpw: runner.bestBpw,
         tunnel_url: tunnel.getUrl(),
@@ -76,13 +105,13 @@ export function startServer(port = 8000, host = '0.0.0.0') {
       return;
     }
 
-    // 4. Experiments API
+    // 5. Experiments List API
     if (pathname === '/api/experiments' && req.method === 'GET') {
       sendJson(db.getAllExperiments());
       return;
     }
 
-    // 5. Experiment Details API: /api/experiments/:id
+    // 6. Single Experiment Details API: /api/experiments/:id
     const expMatch = pathname.match(/^\/api\/experiments\/(\d+)$/);
     if (expMatch && req.method === 'GET') {
       const id = parseInt(expMatch[1], 10);
@@ -92,7 +121,7 @@ export function startServer(port = 8000, host = '0.0.0.0') {
       return;
     }
 
-    // 6. Control Actions: /api/control/:action
+    // 7. Control Actions API: /api/control/:action
     const ctrlMatch = pathname.match(/^\/api\/control\/(start|pause|resume|step)$/);
     if (ctrlMatch && req.method === 'POST') {
       const action = ctrlMatch[1];
@@ -104,7 +133,7 @@ export function startServer(port = 8000, host = '0.0.0.0') {
       return;
     }
 
-    // 7. Config API
+    // 8. Config API
     if (pathname === '/api/config') {
       if (req.method === 'GET') {
         const currentCfg = config.getAll();
@@ -120,7 +149,6 @@ export function startServer(port = 8000, host = '0.0.0.0') {
         req.on('end', () => {
           try {
             const parsed = JSON.parse(body);
-            // If user did not change masked key, keep original
             if (parsed.OPENAI_API_KEY && parsed.OPENAI_API_KEY.includes('***')) {
               delete parsed.OPENAI_API_KEY;
             }

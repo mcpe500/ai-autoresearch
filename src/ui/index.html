@@ -12,10 +12,11 @@
       theme: {
         extend: {
           colors: {
-            brand: { 400: '#38bdf8', 500: '#0ea5e9', 600: '#0284c7' },
             darkBg: '#090d16',
             cardBg: '#111827',
-            borderCol: '#1f293d'
+            borderCol: '#1f293d',
+            accent: '#06b6d4',
+            thinkingCol: '#a855f7'
           }
         }
       }
@@ -27,17 +28,22 @@
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: #090d16; }
     ::-webkit-scrollbar-thumb { background: #1f293d; border-radius: 3px; }
+    @keyframes pulseGlow {
+      0%, 100% { box-shadow: 0 0 15px rgba(6, 182, 212, 0.4); }
+      50% { box-shadow: 0 0 25px rgba(6, 182, 212, 0.8); }
+    }
+    .active-stage { animation: pulseGlow 2s infinite; border-color: #06b6d4 !important; background-color: rgba(6, 182, 212, 0.1) !important; }
   </style>
 </head>
 <body class="min-h-screen flex flex-col">
   <!-- Top Navigation Bar -->
-  <header class="border-b border-borderCol bg-cardBg/80 backdrop-blur sticky top-0 z-40 px-4 py-3">
-    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+  <header class="border-b border-borderCol bg-cardBg/90 backdrop-blur sticky top-0 z-40 px-4 py-2.5">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
       <div class="flex items-center space-x-3">
         <div class="w-3 h-3 rounded-full bg-cyan-400 animate-pulse"></div>
         <div>
           <h1 class="text-sm font-bold tracking-wider text-cyan-400 uppercase">AutoResearch Engine</h1>
-          <p class="text-xs text-slate-400">Universal Sub-1-Bit Neural Quantizer // Model A</p>
+          <p class="text-[11px] text-slate-400">Universal Sub-1-Bit Neural Quantizer // Model A</p>
         </div>
       </div>
 
@@ -82,49 +88,162 @@
     </div>
   </header>
 
-  <!-- Main Content Grid -->
-  <main class="flex-1 max-w-7xl w-full mx-auto p-4 space-y-6">
-    <!-- Row 1: Charts & Active Experiment -->
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-      <!-- Pareto Frontier Chart (7 cols) -->
-      <div class="lg:col-span-7 bg-cardBg border border-borderCol rounded-lg p-4 flex flex-col">
-        <div class="flex items-center justify-between mb-2">
-          <div>
-            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-300">Pareto Frontier: Rate vs Distortion</h2>
-            <p class="text-[11px] text-slate-500">Lower is better. Target: BPW &lt; 1.0 with minimal functional degradation.</p>
-          </div>
-          <span class="text-[10px] text-slate-400 bg-slate-900 border border-borderCol px-2 py-0.5 rounded">Live Plot</span>
-        </div>
-        <div class="relative flex-1 min-h-[260px]">
-          <canvas id="paretoChart"></canvas>
-        </div>
+  <!-- Main Content Area -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 space-y-4">
+    
+    <!-- 1. Visual Research Pipeline Stepper -->
+    <div class="bg-cardBg border border-borderCol rounded-lg p-3">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Autonomous Research Pipeline (Real-Time Flow)</span>
+        <span id="pipelineStatusText" class="text-[11px] font-mono text-cyan-400">Stage 1 of 7</span>
       </div>
 
-      <!-- Active Experiment & Streaming Terminal (5 cols) -->
-      <div class="lg:col-span-5 bg-cardBg border border-borderCol rounded-lg p-4 flex flex-col">
-        <div class="flex items-center justify-between mb-2 pb-2 border-b border-borderCol">
-          <div class="truncate">
-            <span class="text-[11px] uppercase tracking-wider text-cyan-400 font-bold">Current Hypothesis</span>
-            <p id="activeHypothesis" class="text-xs text-slate-200 truncate mt-0.5">Awaiting start...</p>
-          </div>
-          <button onclick="clearTerminal()" class="text-[10px] text-slate-500 hover:text-slate-300">Clear</button>
+      <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2" id="pipelineGrid">
+        <!-- Stage 1 -->
+        <div id="stageNode1" class="border border-borderCol bg-slate-900/60 rounded p-2 text-center transition duration-300">
+          <div class="text-base mb-0.5">🧠</div>
+          <div class="text-[11px] font-bold text-slate-300">1. Brainstorm</div>
+          <div class="text-[9px] text-slate-500 mt-0.5">Context &amp; History</div>
         </div>
-        <div id="activeRationale" class="text-[11px] text-slate-400 italic mb-2 line-clamp-2"></div>
-        <div class="flex-1 bg-black/60 border border-slate-900 rounded p-2.5 overflow-y-auto max-h-[240px] term-font text-[11px] leading-relaxed text-slate-300" id="terminalLog">
-          <div class="text-slate-600">// Terminal ready. Connected to live research stream...</div>
+
+        <!-- Stage 2 -->
+        <div id="stageNode2" class="border border-borderCol bg-slate-900/60 rounded p-2 text-center transition duration-300">
+          <div class="text-base mb-0.5">💭</div>
+          <div class="text-[11px] font-bold text-slate-300">2. AI Thinking</div>
+          <div class="text-[9px] text-purple-400 mt-0.5">Live Reasoning</div>
+        </div>
+
+        <!-- Stage 3 -->
+        <div id="stageNode3" class="border border-borderCol bg-slate-900/60 rounded p-2 text-center transition duration-300">
+          <div class="text-base mb-0.5">💻</div>
+          <div class="text-[11px] font-bold text-slate-300">3. Code Mutation</div>
+          <div class="text-[9px] text-slate-500 mt-0.5">Editing train.py</div>
+        </div>
+
+        <!-- Stage 4 -->
+        <div id="stageNode4" class="border border-borderCol bg-slate-900/60 rounded p-2 text-center transition duration-300">
+          <div class="text-base mb-0.5">🔍</div>
+          <div class="text-[11px] font-bold text-slate-300">4. Syntax Check</div>
+          <div class="text-[9px] text-slate-500 mt-0.5">py_compile lint</div>
+        </div>
+
+        <!-- Stage 5 -->
+        <div id="stageNode5" class="border border-borderCol bg-slate-900/60 rounded p-2 text-center transition duration-300">
+          <div class="text-base mb-0.5">⚙️</div>
+          <div class="text-[11px] font-bold text-slate-300">5. Subprocess</div>
+          <div class="text-[9px] text-slate-500 mt-0.5">CPU Experiment</div>
+        </div>
+
+        <!-- Stage 6 -->
+        <div id="stageNode6" class="border border-borderCol bg-slate-900/60 rounded p-2 text-center transition duration-300">
+          <div class="text-base mb-0.5">📊</div>
+          <div class="text-[11px] font-bold text-slate-300">6. Evaluation</div>
+          <div class="text-[9px] text-slate-500 mt-0.5">prepare.py check</div>
+        </div>
+
+        <!-- Stage 7 -->
+        <div id="stageNode7" class="border border-borderCol bg-slate-900/60 rounded p-2 text-center transition duration-300">
+          <div class="text-base mb-0.5">⚖️</div>
+          <div class="text-[11px] font-bold text-slate-300">7. Decision</div>
+          <div class="text-[9px] text-slate-500 mt-0.5">Git Commit/Rollback</div>
         </div>
       </div>
     </div>
 
-    <!-- Row 2: Experiment History Table -->
-    <div class="bg-cardBg border border-borderCol rounded-lg p-4">
-      <div class="flex items-center justify-between mb-4">
+    <!-- 2. "Lagi Ngapain" Current Activity Status Banner -->
+    <div class="bg-gradient-to-r from-slate-900 via-cardBg to-slate-900 border border-cyan-900/50 rounded-lg p-3.5 flex flex-wrap items-center justify-between gap-3 shadow-lg">
+      <div class="flex items-center space-x-3 max-w-3xl">
+        <span id="activeStagePill" class="px-2.5 py-1 rounded text-[11px] font-bold uppercase bg-cyan-950 text-cyan-400 border border-cyan-800 shrink-0">
+          STAGE 1: BRAINSTORMING
+        </span>
+        <div class="truncate">
+          <p id="currentActionText" class="text-sm font-medium text-slate-200">
+            System initialized. Ready to launch autonomous research cycle.
+          </p>
+          <p id="activeHypothesisSub" class="text-[11px] text-slate-400 truncate mt-0.5">
+            Target: Sub-1-Bit Neural Quantization (< 1.0 BPW) on Canonical Neural IR.
+          </p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <div class="text-right">
+          <span class="text-[10px] uppercase text-slate-400">Stage Elapsed</span>
+          <p id="stageElapsedTimer" class="font-mono text-sm font-bold text-cyan-400">0.0s</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Middle Section: Pareto Chart & Multi-Tab Activity Stream -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+      
+      <!-- Pareto Frontier Chart (5 cols) -->
+      <div class="lg:col-span-5 bg-cardBg border border-borderCol rounded-lg p-3.5 flex flex-col">
+        <div class="flex items-center justify-between mb-2">
+          <div>
+            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-300">Pareto Frontier: Rate vs Distortion</h2>
+            <p class="text-[10px] text-slate-500">Lower is better. Sub-1-bit: BPW &lt; 1.0.</p>
+          </div>
+          <span class="text-[10px] text-slate-400 bg-slate-900 border border-borderCol px-2 py-0.5 rounded">Live Plot</span>
+        </div>
+        <div class="relative flex-1 min-h-[250px]">
+          <canvas id="paretoChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Tabbed Activity Center (7 cols) -->
+      <div class="lg:col-span-7 bg-cardBg border border-borderCol rounded-lg p-3.5 flex flex-col">
+        <!-- Tab Navigation -->
+        <div class="flex items-center justify-between border-b border-borderCol pb-2 mb-2">
+          <div class="flex space-x-2 text-xs">
+            <button id="tabBtnThinking" onclick="switchTab('thinking')" class="px-2.5 py-1 rounded font-medium text-purple-400 bg-purple-950/60 border border-purple-800 transition">
+              💭 AI Thinking Stream
+            </button>
+            <button id="tabBtnCode" onclick="switchTab('code')" class="px-2.5 py-1 rounded font-medium text-slate-400 hover:text-white transition">
+              💻 Live Code &amp; Diff
+            </button>
+            <button id="tabBtnStdout" onclick="switchTab('stdout')" class="px-2.5 py-1 rounded font-medium text-slate-400 hover:text-white transition">
+              🖥️ Subprocess Stdout
+            </button>
+            <button id="tabBtnLogs" onclick="switchTab('logs')" class="px-2.5 py-1 rounded font-medium text-slate-400 hover:text-white transition">
+              📜 Timeline Log
+            </button>
+          </div>
+          <button onclick="clearCurrentTab()" class="text-[10px] text-slate-500 hover:text-slate-300">Clear</button>
+        </div>
+
+        <!-- Tab 1: AI Thinking Stream -->
+        <div id="tabContentThinking" class="tab-pane flex-1 bg-black/60 border border-slate-900 rounded p-3 overflow-y-auto max-h-[260px] term-font text-xs leading-relaxed text-purple-200">
+          <div class="text-slate-600">// Real-time AI Scientist reasoning will stream here...</div>
+        </div>
+
+        <!-- Tab 2: Live Code Stream -->
+        <div id="tabContentCode" class="tab-pane hidden flex-1 bg-black/60 border border-slate-900 rounded p-3 overflow-y-auto max-h-[260px] term-font text-xs leading-relaxed text-emerald-300 whitespace-pre-wrap">
+          <div class="text-slate-600">// Generated code mutations for train.py will appear here...</div>
+        </div>
+
+        <!-- Tab 3: Subprocess Stdout -->
+        <div id="tabContentStdout" class="tab-pane hidden flex-1 bg-black/60 border border-slate-900 rounded p-3 overflow-y-auto max-h-[260px] term-font text-xs leading-relaxed text-cyan-200">
+          <div class="text-slate-600">// python3 train.py stdout will stream here...</div>
+        </div>
+
+        <!-- Tab 4: Full Log Timeline -->
+        <div id="tabContentLogs" class="tab-pane hidden flex-1 bg-black/60 border border-slate-900 rounded p-3 overflow-y-auto max-h-[260px] term-font text-xs leading-relaxed text-slate-300">
+          <div class="text-slate-600">// System logs...</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 4. Experiment History Table -->
+    <div class="bg-cardBg border border-borderCol rounded-lg p-3.5">
+      <div class="flex items-center justify-between mb-3">
         <div>
           <h2 class="text-xs font-bold uppercase tracking-wider text-slate-300">Experiment Log &amp; Pareto Progress</h2>
-          <p class="text-[11px] text-slate-500">All iterations committed, discarded, or crashed during continuous exploration.</p>
+          <p class="text-[10px] text-slate-500">History of all iterations committed, discarded, or crashed.</p>
         </div>
         <button onclick="fetchExperiments()" class="text-xs text-slate-400 hover:text-white bg-slate-900 border border-borderCol px-2.5 py-1 rounded">
-          ↻ Refresh
+          ↻ Refresh Table
         </button>
       </div>
 
@@ -132,15 +251,15 @@
         <table class="w-full text-left text-xs">
           <thead class="text-slate-500 uppercase border-b border-borderCol bg-slate-900/40">
             <tr>
-              <th class="py-2.5 px-3">Iter</th>
-              <th class="py-2.5 px-3">Status</th>
-              <th class="py-2.5 px-3">Hypothesis</th>
-              <th class="py-2.5 px-3 text-right">BPW</th>
-              <th class="py-2.5 px-3 text-right">Degradation</th>
-              <th class="py-2.5 px-3 text-right">Pareto Score</th>
-              <th class="py-2.5 px-3 text-right">Comp Ratio</th>
-              <th class="py-2.5 px-3 text-right">Duration</th>
-              <th class="py-2.5 px-3 text-center">Action</th>
+              <th class="py-2 px-3">Iter</th>
+              <th class="py-2 px-3">Status</th>
+              <th class="py-2 px-3">Hypothesis</th>
+              <th class="py-2 px-3 text-right">BPW</th>
+              <th class="py-2 px-3 text-right">Degradation</th>
+              <th class="py-2 px-3 text-right">Pareto Score</th>
+              <th class="py-2 px-3 text-right">Comp Ratio</th>
+              <th class="py-2 px-3 text-right">Duration</th>
+              <th class="py-2 px-3 text-center">Action</th>
             </tr>
           </thead>
           <tbody id="experimentsTableBody" class="divide-y divide-borderCol">
@@ -169,7 +288,7 @@
           <pre id="modalDiff" class="bg-black/70 p-3 rounded text-[11px] term-font text-emerald-300 overflow-x-auto max-h-64 whitespace-pre-wrap"></pre>
         </div>
         <div>
-          <h4 class="text-xs uppercase font-bold text-slate-400 mb-1">Execution Stdout:</h4>
+          <h4 class="text-xs uppercase font-bold text-slate-400 mb-1">Execution Output:</h4>
           <pre id="modalStdout" class="bg-black/70 p-3 rounded text-[11px] term-font text-slate-300 overflow-x-auto max-h-48 whitespace-pre-wrap"></pre>
         </div>
       </div>
@@ -217,64 +336,78 @@
   <script>
     let paretoChartInstance = null;
     let eventSource = null;
+    let activeTab = 'thinking';
+    let lastLogId = 0;
+    let currentStage = 1;
+    let stageTimerInterval = null;
+    let stageElapsedSec = 0;
 
-    // Initialize chart
-    function initChart() {
-      const ctx = document.getElementById('paretoChart').getContext('2d');
-      paretoChartInstance = new Chart(ctx, {
-        type: 'scatter',
-        data: {
-          datasets: [
-            {
-              label: 'Kept (Improved)',
-              data: [],
-              backgroundColor: '#10b981',
-              pointRadius: 6,
-              pointHoverRadius: 8,
-            },
-            {
-              label: 'Discarded',
-              data: [],
-              backgroundColor: '#64748b',
-              pointRadius: 4,
-            },
-            {
-              label: 'Crashed',
-              data: [],
-              backgroundColor: '#ef4444',
-              pointRadius: 4,
-              pointStyle: 'crossRot'
-            }
-          ]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: {
-            x: {
-              title: { display: true, text: 'Bits Per Weight (BPW)', color: '#94a3b8' },
-              grid: { color: '#1e293b' },
-              ticks: { color: '#94a3b8' }
-            },
-            y: {
-              title: { display: true, text: 'Functional Degradation (%)', color: '#94a3b8' },
-              grid: { color: '#1e293b' },
-              ticks: { color: '#94a3b8' }
-            }
-          },
-          plugins: {
-            legend: { labels: { color: '#94a3b8', boxWidth: 12 } },
-            tooltip: {
-              callbacks: {
-                label: function(ctx) {
-                  const p = ctx.raw;
-                  return `Iter ${p.iter}: BPW=${p.x}, Deg=${p.y}% (${p.hypo})`;
-                }
-              }
-            }
-          }
+    const STAGE_LABELS = {
+      1: '1. BRAINSTORMING',
+      2: '2. AI THINKING',
+      3: '3. CODE MUTATION',
+      4: '4. SYNTAX CHECK',
+      5: '5. SUBPROCESS',
+      6: '6. EVALUATION',
+      7: '7. DECISION & GIT'
+    };
+
+    function updatePipelineUI(stageNum, actionText) {
+      currentStage = stageNum;
+      document.getElementById('pipelineStatusText').innerText = `Stage ${stageNum} of 7: ${STAGE_LABELS[stageNum] || ''}`;
+      document.getElementById('activeStagePill').innerText = STAGE_LABELS[stageNum] || `STAGE ${stageNum}`;
+
+      if (actionText) {
+        document.getElementById('currentActionText').innerText = actionText;
+      }
+
+      // Update pipeline nodes
+      for (let i = 1; i <= 7; i++) {
+        const node = document.getElementById(`stageNode${i}`);
+        if (!node) continue;
+        node.classList.remove('active-stage');
+
+        if (i < stageNum) {
+          node.className = 'border border-emerald-900 bg-emerald-950/30 rounded p-2 text-center transition duration-300';
+        } else if (i === stageNum) {
+          node.className = 'border active-stage rounded p-2 text-center transition duration-300';
+        } else {
+          node.className = 'border border-borderCol bg-slate-900/60 rounded p-2 text-center opacity-60 transition duration-300';
+        }
+      }
+    }
+
+    function switchTab(tabName) {
+      activeTab = tabName;
+      ['thinking', 'code', 'stdout', 'logs'].forEach(t => {
+        const btn = document.getElementById(`tabBtn${t.charAt(0).toUpperCase() + t.slice(1)}`);
+        const pane = document.getElementById(`tabContent${t.charAt(0).toUpperCase() + t.slice(1)}`);
+        if (t === tabName) {
+          btn.className = 'px-2.5 py-1 rounded font-medium text-cyan-400 bg-cyan-950/60 border border-cyan-800 transition';
+          pane.classList.remove('hidden');
+        } else {
+          btn.className = 'px-2.5 py-1 rounded font-medium text-slate-400 hover:text-white transition';
+          pane.classList.add('hidden');
         }
       });
+    }
+
+    function appendToPane(paneId, text) {
+      const pane = document.getElementById(paneId);
+      if (!pane) return;
+      pane.innerText += text;
+      pane.scrollTop = pane.scrollHeight;
+    }
+
+    function clearCurrentTab() {
+      const paneMap = {
+        thinking: 'tabContentThinking',
+        code: 'tabContentCode',
+        stdout: 'tabContentStdout',
+        logs: 'tabContentLogs'
+      };
+      const p = document.getElementById(paneMap[activeTab]);
+      if (p) p.innerText = '';
     }
 
     // Connect Server-Sent Events (SSE)
@@ -285,7 +418,7 @@
       eventSource.onmessage = (e) => {
         try {
           const msg = JSON.parse(e.data);
-          handleEvent(msg);
+          handleLiveEvent(msg);
         } catch (err) {}
       };
 
@@ -294,40 +427,85 @@
       };
     }
 
-    function handleEvent(msg) {
+    function handleLiveEvent(msg) {
       const { event, data } = msg;
 
-      if (event === 'log' || event === 'stdout' || event === 'stderr') {
-        appendTerminal(typeof data === 'string' ? data : JSON.stringify(data));
+      if (event === 'thinking_token') {
+        appendToPane('tabContentThinking', data.token);
+      } else if (event === 'code_token') {
+        appendToPane('tabContentCode', data.token);
+      } else if (event === 'stage_change') {
+        updatePipelineUI(data.stage, data.action);
+        if (data.iteration) document.getElementById('statIter').innerText = data.iteration;
+      } else if (event === 'action_update') {
+        document.getElementById('currentActionText').innerText = data.action;
+        if (data.elapsed) stageElapsedSec = data.elapsed;
       } else if (event === 'status_change') {
         updateStatusBadge(data.status);
-        if (data.iteration) document.getElementById('statIter').innerText = data.iteration;
       } else if (event === 'hypothesis') {
-        document.getElementById('activeHypothesis').innerText = data.hypothesis;
-        document.getElementById('activeRationale').innerText = data.rationale || '';
-        document.getElementById('statIter').innerText = data.iteration;
+        document.getElementById('activeHypothesisSub').innerText = data.hypothesis;
+        if (data.reasoning) {
+          const tPane = document.getElementById('tabContentThinking');
+          if (tPane.innerText.includes('// Real-time')) tPane.innerText = '';
+          tPane.innerText += data.reasoning + '\n';
+        }
+      } else if (event === 'log_entry') {
+        processLogEntry(data);
       } else if (event === 'experiment_completed') {
         fetchStatus();
         fetchExperiments();
       }
     }
 
-    function appendTerminal(text) {
-      const term = document.getElementById('terminalLog');
-      term.innerText += text + '\n';
-      term.scrollTop = term.scrollHeight;
+    function processLogEntry(entry) {
+      if (entry.id > lastLogId) lastLogId = entry.id;
+
+      if (entry.type === 'stdout') {
+        appendToPane('tabContentStdout', entry.text);
+      } else if (entry.type === 'stderr') {
+        appendToPane('tabContentStdout', '\n[STDERR] ' + entry.text);
+      } else if (entry.type === 'thinking') {
+        appendToPane('tabContentThinking', entry.text);
+      } else if (entry.type === 'code') {
+        appendToPane('tabContentCode', entry.text);
+      } else {
+        appendToPane('tabContentLogs', `[${entry.timestamp.slice(11, 19)}] ${entry.text}\n`);
+      }
     }
 
-    function clearTerminal() {
-      document.getElementById('terminalLog').innerText = '';
+    // Dual-Channel Polling Fallback: /api/logs?since=lastLogId
+    async function pollLogs() {
+      try {
+        const res = await fetch(`/api/logs?since=${lastLogId}`);
+        const data = await res.json();
+
+        if (data.current_stage) {
+          updatePipelineUI(data.current_stage, data.current_action);
+        }
+        if (data.stage_elapsed_sec !== undefined) {
+          stageElapsedSec = data.stage_elapsed_sec;
+          document.getElementById('stageElapsedTimer').innerText = `${stageElapsedSec.toFixed(1)}s`;
+        }
+        if (data.active_hypothesis) {
+          document.getElementById('activeHypothesisSub').innerText = data.active_hypothesis;
+        }
+
+        // Catch up on initial logs or if SSE missed anything
+        if (lastLogId === 0 && data.accumulated_thinking) {
+          document.getElementById('tabContentThinking').innerText = data.accumulated_thinking;
+        }
+
+        if (data.logs && data.logs.length > 0) {
+          data.logs.forEach(processLogEntry);
+        }
+      } catch (err) {}
     }
 
     function updateStatusBadge(status) {
       const badge = document.getElementById('runnerStatusBadge');
       badge.innerText = status;
       badge.className = 'px-2.5 py-1 rounded-full font-semibold uppercase border text-xs ';
-      if (status === 'RUNNING_EXPERIMENT') badge.className += 'bg-emerald-950 text-emerald-400 border-emerald-800 animate-pulse';
-      else if (status === 'THINKING') badge.className += 'bg-cyan-950 text-cyan-400 border-cyan-800 animate-pulse';
+      if (status === 'RUNNING') badge.className += 'bg-emerald-950 text-emerald-400 border-emerald-800 animate-pulse';
       else if (status === 'PAUSED') badge.className += 'bg-amber-950 text-amber-400 border-amber-800';
       else badge.className += 'bg-slate-800 text-slate-300 border-slate-700';
     }
@@ -340,6 +518,10 @@
         document.getElementById('statIter').innerText = data.iteration;
         document.getElementById('statBpw').innerText = data.best_bpw !== null ? data.best_bpw.toFixed(4) : '--';
         document.getElementById('statPareto').innerText = data.best_pareto_score !== null ? data.best_pareto_score.toFixed(4) : '--';
+
+        if (data.current_stage) {
+          updatePipelineUI(data.current_stage, data.current_action);
+        }
 
         if (data.tunnel_url) {
           const container = document.getElementById('tunnelBadgeContainer');
@@ -356,7 +538,6 @@
         const res = await fetch('/api/experiments');
         const list = await res.json();
 
-        // Update table
         const tbody = document.getElementById('experimentsTableBody');
         if (list.length === 0) {
           tbody.innerHTML = '<tr><td colspan="9" class="py-4 text-center text-slate-500">No experiments yet. Click Start Loop to begin!</td></tr>';
@@ -458,13 +639,82 @@
       alert('Settings saved to .env!');
     }
 
-    // Auto-init
+    // Chart Init
+    function initChart() {
+      const ctx = document.getElementById('paretoChart').getContext('2d');
+      paretoChartInstance = new Chart(ctx, {
+        type: 'scatter',
+        data: {
+          datasets: [
+            {
+              label: 'Kept (Improved)',
+              data: [],
+              backgroundColor: '#10b981',
+              pointRadius: 6,
+              pointHoverRadius: 8,
+            },
+            {
+              label: 'Discarded',
+              data: [],
+              backgroundColor: '#64748b',
+              pointRadius: 4,
+            },
+            {
+              label: 'Crashed',
+              data: [],
+              backgroundColor: '#ef4444',
+              pointRadius: 4,
+              pointStyle: 'crossRot'
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: {
+              title: { display: true, text: 'Bits Per Weight (BPW)', color: '#94a3b8' },
+              grid: { color: '#1e293b' },
+              ticks: { color: '#94a3b8' }
+            },
+            y: {
+              title: { display: true, text: 'Functional Degradation (%)', color: '#94a3b8' },
+              grid: { color: '#1e293b' },
+              ticks: { color: '#94a3b8' }
+            }
+          },
+          plugins: {
+            legend: { labels: { color: '#94a3b8', boxWidth: 12 } },
+            tooltip: {
+              callbacks: {
+                label: function(ctx) {
+                  const p = ctx.raw;
+                  return `Iter ${p.iter}: BPW=${p.x}, Deg=${p.y}% (${p.hypo})`;
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // Page Lifecycle
     window.addEventListener('DOMContentLoaded', () => {
       initChart();
       fetchStatus();
       fetchExperiments();
+      pollLogs();
       connectSSE();
-      setInterval(fetchStatus, 5000);
+
+      // Periodic fast poll (every 1.5s) to guarantee zero-freeze on Cloudflare
+      setInterval(pollLogs, 1500);
+      setInterval(fetchStatus, 4000);
+
+      // Local ticker for stage elapsed timer
+      setInterval(() => {
+        stageElapsedSec += 0.5;
+        document.getElementById('stageElapsedTimer').innerText = `${stageElapsedSec.toFixed(1)}s`;
+      }, 500);
     });
   </script>
 </body>
