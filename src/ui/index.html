@@ -195,21 +195,30 @@
       <div class="lg:col-span-7 bg-cardBg border border-borderCol rounded-lg p-3.5 flex flex-col">
         <!-- Tab Navigation -->
         <div class="flex items-center justify-between border-b border-borderCol pb-2 mb-2">
-          <div class="flex space-x-2 text-xs">
-            <button id="tabBtnThinking" onclick="switchTab('thinking')" class="px-2.5 py-1 rounded font-medium text-purple-400 bg-purple-950/60 border border-purple-800 transition">
-              💭 AI Thinking Stream
+          <div class="flex flex-wrap gap-1.5 text-xs">
+            <button id="tabBtnThinking" onclick="userSelectTab('thinking')" class="px-2.5 py-1 rounded font-medium text-purple-400 bg-purple-950/60 border border-purple-800 transition flex items-center gap-1.5">
+              <span>💭 AI Thinking Stream</span>
+              <span id="tabBadgeThinking" class="text-[10px] px-1.5 py-0.2 rounded bg-purple-900/60 text-purple-300">0</span>
             </button>
-            <button id="tabBtnCode" onclick="switchTab('code')" class="px-2.5 py-1 rounded font-medium text-slate-400 hover:text-white transition">
-              💻 Live Code &amp; Diff
+            <button id="tabBtnCode" onclick="userSelectTab('code')" class="px-2.5 py-1 rounded font-medium text-slate-400 hover:text-white transition flex items-center gap-1.5">
+              <span>💻 Live Code &amp; Diff</span>
+              <span id="tabBadgeCode" class="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400">0</span>
             </button>
-            <button id="tabBtnStdout" onclick="switchTab('stdout')" class="px-2.5 py-1 rounded font-medium text-slate-400 hover:text-white transition">
-              🖥️ Subprocess Stdout
+            <button id="tabBtnStdout" onclick="userSelectTab('stdout')" class="px-2.5 py-1 rounded font-medium text-slate-400 hover:text-white transition flex items-center gap-1.5">
+              <span>🖥️ Subprocess Stdout</span>
+              <span id="tabBadgeStdout" class="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400">0</span>
             </button>
-            <button id="tabBtnLogs" onclick="switchTab('logs')" class="px-2.5 py-1 rounded font-medium text-slate-400 hover:text-white transition">
-              📜 Timeline Log
+            <button id="tabBtnLogs" onclick="userSelectTab('logs')" class="px-2.5 py-1 rounded font-medium text-slate-400 hover:text-white transition flex items-center gap-1.5">
+              <span>📜 Timeline Log</span>
+              <span id="tabBadgeLogs" class="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400">0</span>
             </button>
           </div>
-          <button onclick="clearCurrentTab()" class="text-[10px] text-slate-500 hover:text-slate-300">Clear</button>
+          <div class="flex items-center gap-2">
+            <button id="btnAutoTab" onclick="toggleAutoTab()" class="text-[10px] px-2 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-800 flex items-center gap-1" title="Auto-switches tabs to match active stage">
+              <span>Auto-Follow: ON</span>
+            </button>
+            <button onclick="clearCurrentTab()" class="text-[10px] text-slate-500 hover:text-slate-300">Clear</button>
+          </div>
         </div>
 
         <!-- Tab 1: AI Thinking Stream -->
@@ -352,6 +361,82 @@
       7: '7. DECISION & GIT'
     };
 
+    const TAB_THEMES = {
+      thinking: {
+        btnActive: 'px-2.5 py-1 rounded font-medium text-purple-400 bg-purple-950/60 border border-purple-800 transition flex items-center gap-1.5',
+        btnInactive: 'px-2.5 py-1 rounded font-medium text-slate-400 hover:text-white transition flex items-center gap-1.5',
+        badgeActive: 'text-[10px] px-1.5 py-0.2 rounded bg-purple-900/60 text-purple-300',
+        badgeInactive: 'text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400',
+      },
+      code: {
+        btnActive: 'px-2.5 py-1 rounded font-medium text-emerald-400 bg-emerald-950/60 border border-emerald-800 transition flex items-center gap-1.5',
+        btnInactive: 'px-2.5 py-1 rounded font-medium text-slate-400 hover:text-white transition flex items-center gap-1.5',
+        badgeActive: 'text-[10px] px-1.5 py-0.2 rounded bg-emerald-900/60 text-emerald-300',
+        badgeInactive: 'text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400',
+      },
+      stdout: {
+        btnActive: 'px-2.5 py-1 rounded font-medium text-cyan-400 bg-cyan-950/60 border border-cyan-800 transition flex items-center gap-1.5',
+        btnInactive: 'px-2.5 py-1 rounded font-medium text-slate-400 hover:text-white transition flex items-center gap-1.5',
+        badgeActive: 'text-[10px] px-1.5 py-0.2 rounded bg-cyan-900/60 text-cyan-300',
+        badgeInactive: 'text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400',
+      },
+      logs: {
+        btnActive: 'px-2.5 py-1 rounded font-medium text-sky-400 bg-sky-950/60 border border-sky-800 transition flex items-center gap-1.5',
+        btnInactive: 'px-2.5 py-1 rounded font-medium text-slate-400 hover:text-white transition flex items-center gap-1.5',
+        badgeActive: 'text-[10px] px-1.5 py-0.2 rounded bg-sky-900/60 text-sky-300',
+        badgeInactive: 'text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400',
+      }
+    };
+
+    let autoFollowTabs = true;
+    let manualTabTimer = null;
+
+    function toggleAutoTab() {
+      autoFollowTabs = !autoFollowTabs;
+      const btn = document.getElementById('btnAutoTab');
+      if (btn) {
+        if (autoFollowTabs) {
+          btn.innerHTML = '<span>Auto-Follow: ON</span>';
+          btn.className = 'text-[10px] px-2 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-800 flex items-center gap-1';
+        } else {
+          btn.innerHTML = '<span>Auto-Follow: OFF</span>';
+          btn.className = 'text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700 flex items-center gap-1';
+        }
+      }
+    }
+
+    function userSelectTab(tabName) {
+      switchTab(tabName);
+      if (autoFollowTabs) {
+        clearTimeout(manualTabTimer);
+        const btn = document.getElementById('btnAutoTab');
+        if (btn) {
+          btn.innerHTML = '<span>Auto: Paused (20s)</span>';
+          btn.className = 'text-[10px] px-2 py-0.5 rounded bg-amber-950 text-amber-400 border border-amber-800 flex items-center gap-1';
+        }
+        manualTabTimer = setTimeout(() => {
+          manualTabTimer = null;
+          if (btn && autoFollowTabs) {
+            btn.innerHTML = '<span>Auto-Follow: ON</span>';
+            btn.className = 'text-[10px] px-2 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-800 flex items-center gap-1';
+          }
+        }, 20000);
+      }
+    }
+
+    function autoSwitchTabForStage(stageNum) {
+      if (!autoFollowTabs || manualTabTimer) return;
+      if (stageNum === 2) {
+        if (activeTab !== 'thinking') switchTab('thinking');
+      } else if (stageNum === 3 || stageNum === 4) {
+        if (activeTab !== 'code') switchTab('code');
+      } else if (stageNum === 5) {
+        if (activeTab !== 'stdout') switchTab('stdout');
+      } else if (stageNum === 6 || stageNum === 7 || stageNum === 1) {
+        if (activeTab !== 'logs') switchTab('logs');
+      }
+    }
+
     function updatePipelineUI(stageNum, actionText) {
       currentStage = stageNum;
       document.getElementById('pipelineStatusText').innerText = `Stage ${stageNum} of 7: ${STAGE_LABELS[stageNum] || ''}`;
@@ -360,6 +445,8 @@
       if (actionText) {
         document.getElementById('currentActionText').innerText = actionText;
       }
+
+      autoSwitchTabForStage(stageNum);
 
       // Update pipeline nodes
       for (let i = 1; i <= 7; i++) {
@@ -382,21 +469,57 @@
       ['thinking', 'code', 'stdout', 'logs'].forEach(t => {
         const btn = document.getElementById(`tabBtn${t.charAt(0).toUpperCase() + t.slice(1)}`);
         const pane = document.getElementById(`tabContent${t.charAt(0).toUpperCase() + t.slice(1)}`);
+        const badge = document.getElementById(`tabBadge${t.charAt(0).toUpperCase() + t.slice(1)}`);
+        const theme = TAB_THEMES[t];
+        if (!btn || !pane) return;
+
         if (t === tabName) {
-          btn.className = 'px-2.5 py-1 rounded font-medium text-cyan-400 bg-cyan-950/60 border border-cyan-800 transition';
+          btn.className = theme.btnActive;
+          if (badge) badge.className = theme.badgeActive;
           pane.classList.remove('hidden');
+          pane.scrollTop = pane.scrollHeight;
         } else {
-          btn.className = 'px-2.5 py-1 rounded font-medium text-slate-400 hover:text-white transition';
+          btn.className = theme.btnInactive;
+          if (badge) badge.className = theme.badgeInactive;
           pane.classList.add('hidden');
         }
       });
     }
 
+    function updateBadges() {
+      const tThinking = document.getElementById('tabContentThinking')?.innerText || '';
+      const tCode = document.getElementById('tabContentCode')?.innerText || '';
+      const tStdout = document.getElementById('tabContentStdout')?.innerText || '';
+      const tLogs = document.getElementById('tabContentLogs')?.innerText || '';
+
+      const countThinking = tThinking.includes('// Real-time') ? 0 : Math.round(tThinking.length / 4);
+      const countCode = tCode.includes('// Generated code') ? 0 : (tCode.match(/\n/g) || []).length;
+      const countStdout = tStdout.includes('// python3') ? 0 : (tStdout.match(/\n/g) || []).length;
+      const countLogs = tLogs.includes('// System logs') ? 0 : (tLogs.match(/\n/g) || []).length;
+
+      const bThinking = document.getElementById('tabBadgeThinking');
+      const bCode = document.getElementById('tabBadgeCode');
+      const bStdout = document.getElementById('tabBadgeStdout');
+      const bLogs = document.getElementById('tabBadgeLogs');
+
+      if (bThinking) bThinking.innerText = countThinking > 0 ? `~${countThinking} tok` : '0';
+      if (bCode) bCode.innerText = countCode > 0 ? `${countCode}L` : '0';
+      if (bStdout) bStdout.innerText = countStdout > 0 ? `${countStdout}L` : '0';
+      if (bLogs) bLogs.innerText = countLogs > 0 ? `${countLogs}L` : '0';
+    }
+
     function appendToPane(paneId, text) {
       const pane = document.getElementById(paneId);
       if (!pane) return;
+      if (pane.innerText.includes('// Real-time') || 
+          pane.innerText.includes('// Generated code') || 
+          pane.innerText.includes('// python3 train.py') || 
+          pane.innerText.includes('// System logs')) {
+        pane.innerText = '';
+      }
       pane.innerText += text;
       pane.scrollTop = pane.scrollHeight;
+      updateBadges();
     }
 
     function clearCurrentTab() {
@@ -408,6 +531,7 @@
       };
       const p = document.getElementById(paneMap[activeTab]);
       if (p) p.innerText = '';
+      updateBadges();
     }
 
     // Connect Server-Sent Events (SSE)
@@ -435,6 +559,15 @@
       } else if (event === 'code_token') {
         appendToPane('tabContentCode', data.token);
       } else if (event === 'stage_change') {
+        if (data.stage === 1) {
+          const tPane = document.getElementById('tabContentThinking');
+          const cPane = document.getElementById('tabContentCode');
+          const sPane = document.getElementById('tabContentStdout');
+          if (tPane) tPane.innerText = '// Real-time AI Scientist reasoning will stream here...';
+          if (cPane) cPane.innerText = '// Generated code mutations for train.py will appear here...';
+          if (sPane) sPane.innerText = '// python3 train.py stdout will stream here...';
+          updateBadges();
+        }
         updatePipelineUI(data.stage, data.action);
         if (data.iteration) document.getElementById('statIter').innerText = data.iteration;
       } else if (event === 'action_update') {
@@ -448,6 +581,7 @@
           const tPane = document.getElementById('tabContentThinking');
           if (tPane.innerText.includes('// Real-time')) tPane.innerText = '';
           tPane.innerText += data.reasoning + '\n';
+          updateBadges();
         }
       } else if (event === 'log_entry') {
         processLogEntry(data);
@@ -471,6 +605,7 @@
       } else {
         appendToPane('tabContentLogs', `[${entry.timestamp.slice(11, 19)}] ${entry.text}\n`);
       }
+      updateBadges();
     }
 
     // Dual-Channel Polling Fallback: /api/logs?since=lastLogId
@@ -490,14 +625,27 @@
           document.getElementById('activeHypothesisSub').innerText = data.active_hypothesis;
         }
 
-        // Catch up on initial logs or if SSE missed anything
-        if (lastLogId === 0 && data.accumulated_thinking) {
-          document.getElementById('tabContentThinking').innerText = data.accumulated_thinking;
+        // CRITICAL FIX: Unconditionally update thinking and code from accumulated server state
+        if (data.accumulated_thinking) {
+          const tPane = document.getElementById('tabContentThinking');
+          if (tPane && (tPane.innerText.includes('// Real-time') || tPane.innerText.length < data.accumulated_thinking.length)) {
+            tPane.innerText = data.accumulated_thinking;
+            if (activeTab === 'thinking') tPane.scrollTop = tPane.scrollHeight;
+          }
+        }
+
+        if (data.accumulated_code) {
+          const cPane = document.getElementById('tabContentCode');
+          if (cPane && (cPane.innerText.includes('// Generated code') || cPane.innerText.length < data.accumulated_code.length)) {
+            cPane.innerText = data.accumulated_code;
+            if (activeTab === 'code') cPane.scrollTop = cPane.scrollHeight;
+          }
         }
 
         if (data.logs && data.logs.length > 0) {
           data.logs.forEach(processLogEntry);
         }
+        updateBadges();
       } catch (err) {}
     }
 

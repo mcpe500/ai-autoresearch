@@ -177,6 +177,7 @@ class ResearchRunner {
     // =========================================================================
     this.setStage(1, `Reading previous experiment history & assembling context for Iteration #${iter}...`);
     this.appendLog('log', `\n======================================================\n🚀 Starting Autonomous Experiment #${iter}\n======================================================`);
+    this.appendLog('log', `[TOOL: context] Reading program.md, train.py, and checking last 5 experiment records...`);
 
     const programPrompt = readFileSync(resolve(process.cwd(), 'program.md'), 'utf-8');
     const currentCode = readFileSync(resolve(process.cwd(), 'train.py'), 'utf-8');
@@ -185,9 +186,16 @@ class ResearchRunner {
     // =========================================================================
     // STAGE 2: AI THINKING & LIVE REASONING STREAM
     // =========================================================================
+    const apiBase = config.get('OPENAI_API_BASE');
+    const model = config.get('MODEL_NAME');
     this.setStage(2, `AI Scientist is analyzing model architectures & reasoning in real-time...`);
+    this.appendLog('log', `[TOOL: llm_stream] Requesting completion from ${model} via ${apiBase}...`);
 
     let proposal;
+    let tokenBatch = 0;
+    let lastHeartbeatTime = Date.now();
+    let lastStageTransitionToCode = false;
+
     try {
       proposal = await llm.generateNextExperiment({
         programPrompt,
@@ -195,17 +203,34 @@ class ResearchRunner {
         history,
         lastError: this.lastError,
         onAction: (act) => this.setAction(act),
-        onToken: ({ type, token }) => {
+        onToken: ({ type, token, count }) => {
           if (type === 'thinking') {
             this.accumulatedThinking += token;
-            this.broadcast('thinking_token', { token });
-          } else if (type === 'content') {
-            // As soon as content tokens arrive (code/hypothesis), transition visually to stage 3
-            if (this.currentStage === 2 && (token.includes('<code>') || token.includes('def ') || token.includes('class '))) {
+            this.broadcast('thinking_token', { token, count });
+          } else if (type === 'code') {
+            if (!lastStageTransitionToCode) {
+              lastStageTransitionToCode = true;
               this.setStage(3, `AI Scientist is generating the Python code mutation for train.py...`);
+              this.appendLog('log', `[STAGE 3: Code Mutation] Finished conceptual planning; synthesising candidate train.py...`);
             }
             this.accumulatedCode += token;
-            this.broadcast('code_token', { token });
+            this.broadcast('code_token', { token, count });
+          }
+
+          tokenBatch++;
+          const now = Date.now();
+          if (tokenBatch >= 35 || (now - lastHeartbeatTime > 3000 && tokenBatch > 5)) {
+            const elapsed = this.getStageElapsed();
+            if (this.currentStage === 2) {
+              this.appendLog('log', `[AI THINKING] Streamed ~${count || tokenBatch} reasoning tokens [${elapsed}s elapsed]...`);
+              this.setAction(`AI Scientist reasoning... (~${count || tokenBatch} tokens, ${elapsed}s)`);
+            } else if (this.currentStage === 3) {
+              const lineCount = (this.accumulatedCode.match(/\n/g) || []).length;
+              this.appendLog('log', `[AI CODE] Streamed ~${count || tokenBatch} code tokens (${lineCount} lines) [${elapsed}s elapsed]...`);
+              this.setAction(`Generating train.py mutation... (${lineCount} lines, ${elapsed}s)`);
+            }
+            tokenBatch = 0;
+            lastHeartbeatTime = now;
           }
         },
       });
@@ -226,6 +251,7 @@ class ResearchRunner {
       reasoning: proposal.reasoning,
     });
 
+    this.appendLog('log', `[TOOL: parse] Parsed proposal. Code block size: ${proposal.code?.length || 0} bytes.`);
     this.appendLog('log', `💡 Hypothesis: ${proposal.hypothesis}`);
     if (proposal.rationale) {
       this.appendLog('log', `📖 Rationale: ${proposal.rationale}`);
@@ -241,14 +267,18 @@ class ResearchRunner {
     // STAGE 4: LINTING & SYNTAX VALIDATION
     // =========================================================================
     this.setStage(4, `Writing candidate code to train.py and validating Python syntax with py_compile...`);
+    this.appendLog('log', `[TOOL: write_file] Writing candidate code to train.py (${proposal.code.length} bytes)...`);
     writeFileSync(resolve(process.cwd(), 'train.py'), proposal.code, 'utf-8');
+
+    this.appendLog('log', `[TOOL: git diff] Computing candidate diff...`);
     const codeDiff = git.getDiff('train.py');
 
+    this.appendLog('log', `[TOOL: py_compile] Checking syntax with python3 -m py_compile train.py...`);
     try {
       execSync('python3 -m py_compile train.py', { stdio: 'pipe' });
-      this.appendLog('log', `✓ Syntax validation passed. No compilation errors detected.`);
+      this.appendLog('log', `✓ [TOOL: py_compile] Syntax validation passed. No compilation errors detected.`);
     } catch (syntaxErr) {
-      this.appendLog('stderr', `✗ [SYNTAX ERROR] python3 -m py_compile failed. Rolling back candidate.`);
+      this.appendLog('stderr', `✗ [TOOL: py_compile] Syntax validation failed. Rolling back candidate.`);
       git.discard('train.py');
       this.lastError = `SyntaxError: Code provided in iteration #${iter} failed python py_compile.`;
       db.insertExperiment({
@@ -268,6 +298,7 @@ class ResearchRunner {
     const timeoutSec = config.get('EXPERIMENT_TIMEOUT_SEC');
     const niceLevel = config.get('PROCESS_NICE');
     this.setStage(5, `Running python3 train.py on CPU with nice -n ${niceLevel} (Timeout: ${timeoutSec}s)...`);
+    this.appendLog('log', `[TOOL: spawn] Launching isolated subprocess: nice -n ${niceLevel} python3 train.py (Timeout: ${timeoutSec}s)...`);
 
     const startTime = Date.now();
     const { code, stdout, stderr, timedOut } = await this.runExperimentProcess(niceLevel, timeoutSec);
@@ -277,6 +308,7 @@ class ResearchRunner {
     // STAGE 6: GROUND-TRUTH EVALUATION
     // =========================================================================
     this.setStage(6, `Auditing bit-accounting & evaluating Canonical Neural IR distortion...`);
+    this.appendLog('log', `[TOOL: evaluate_quantizer] Auditing bitstream and checking Canonical Neural IR distortion...`);
 
     if (timedOut) {
       this.appendLog('stderr', `[TIMEOUT] Experiment exceeded ${timeoutSec}s limit. Discarding.`);
@@ -335,6 +367,7 @@ class ResearchRunner {
     this.lastError = null;
     const prevBestScore = this.bestScore;
     const isImprovement = metrics.pareto_score < prevBestScore;
+    this.appendLog('log', `[TOOL: decision] Checking Pareto: candidate ${metrics.pareto_score.toFixed(4)} vs current best ${prevBestScore.toFixed(4)}...`);
 
     let status = 'DISCARD';
     if (isImprovement) {
@@ -347,10 +380,12 @@ class ResearchRunner {
       const tsvLine = `${iter}\texp-${iter}\t${metrics.bpw}\t${metrics.degradation_pct}\t${metrics.pareto_score}\t${metrics.compression_ratio}x\t${durationSec}\tKEEP\t${proposal.hypothesis.replace(/\t/g, ' ')}\n`;
       appendFileSync(resolve(process.cwd(), 'results.tsv'), tsvLine, 'utf-8');
 
+      this.appendLog('log', `[TOOL: git commit] Creating commit exp-${iter}...`);
       const commitHash = git.commit(iter, proposal.hypothesis);
       this.setStage(7, `✅ IMPROVEMENT! Pareto: ${metrics.pareto_score} < ${prevBestScore}. Committed: ${commitHash}`);
       this.appendLog('log', `✅ [IMPROVEMENT] Pareto Score: ${metrics.pareto_score.toFixed(4)} < ${prevBestScore.toFixed(4)} (BPW: ${metrics.bpw}, Deg: ${metrics.degradation_pct}%). COMMITTED (${commitHash})!`);
     } else {
+      this.appendLog('log', `[TOOL: git checkout] Discarding candidate changes...`);
       git.discard('train.py');
       const tsvLine = `${iter}\tdiscarded\t${metrics.bpw}\t${metrics.degradation_pct}\t${metrics.pareto_score}\t${metrics.compression_ratio}x\t${durationSec}\tDISCARD\t${proposal.hypothesis.replace(/\t/g, ' ')}\n`;
       appendFileSync(resolve(process.cwd(), 'results.tsv'), tsvLine, 'utf-8');

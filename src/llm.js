@@ -64,6 +64,9 @@ ${history.length > 0 ? history.map(h => `- Iteration #${h.iteration} [${h.status
 
     let attempt = 0;
     while (attempt < this.maxRetries) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute network safety guard
+
       try {
         const url = `${apiBase}/chat/completions`;
         onAction?.(`Connecting to LLM API (${model} via ${apiBase})...`);
@@ -75,9 +78,11 @@ ${history.length > 0 ? history.map(h => `- Iteration #${h.iteration} [${h.status
             'Authorization': `Bearer ${apiKey}`,
           },
           body: JSON.stringify(payload),
+          signal: controller.signal,
         });
 
         if (resp.status === 429 || resp.status >= 500) {
+          clearTimeout(timeoutId);
           const waitSec = Math.min(45, Math.pow(2, attempt) * 3 + Math.random() * 2);
           onAction?.(`Rate limited (HTTP ${resp.status}). Retrying in ${waitSec.toFixed(1)}s (Attempt ${attempt + 1}/${this.maxRetries})...`);
           await new Promise(r => setTimeout(r, waitSec * 1000));
@@ -86,6 +91,7 @@ ${history.length > 0 ? history.map(h => `- Iteration #${h.iteration} [${h.status
         }
 
         if (!resp.ok) {
+          clearTimeout(timeoutId);
           const errText = await resp.text();
           throw new Error(`LLM API returned HTTP ${resp.status}: ${errText.slice(0, 300)}`);
         }
@@ -96,7 +102,8 @@ ${history.length > 0 ? history.map(h => `- Iteration #${h.iteration} [${h.status
         let buffer = '';
         let fullContent = '';
         let fullReasoning = '';
-        let isInsideThinkingTag = false;
+        let isInsideCode = false;
+        let tokenIndex = 0;
 
         onAction?.(`Streaming AI Scientist reasoning & code tokens...`);
 
@@ -119,29 +126,40 @@ ${history.length > 0 ? history.map(h => `- Iteration #${h.iteration} [${h.status
                 const delta = json.choices?.[0]?.delta;
                 if (!delta) continue;
 
-                // 1. Dedicated reasoning content (Claude 3.7 Sonnet / DeepSeek R1)
-                if (delta.reasoning_content) {
-                  fullReasoning += delta.reasoning_content;
-                  onToken?.({ type: 'thinking', token: delta.reasoning_content });
+                // 1. Dedicated reasoning content (DeepSeek R1, Claude 3.7 Sonnet, o1/o3 proxies)
+                const reasoningChunk = delta.reasoning_content || delta.reasoning;
+                if (reasoningChunk) {
+                  tokenIndex++;
+                  fullReasoning += reasoningChunk;
+                  onToken?.({ type: 'thinking', token: reasoningChunk, count: tokenIndex });
                 }
 
                 // 2. Standard content
                 if (delta.content) {
                   const contentChunk = delta.content;
                   fullContent += contentChunk;
+                  tokenIndex++;
 
-                  // Check for <thinking> XML tags inside content
-                  if (contentChunk.includes('<thinking>')) {
-                    isInsideThinkingTag = true;
-                  }
-
-                  if (isInsideThinkingTag) {
-                    onToken?.({ type: 'thinking', token: contentChunk });
-                    if (contentChunk.includes('</thinking>')) {
-                      isInsideThinkingTag = false;
+                  // Check if we hit the code block boundary
+                  if (!isInsideCode) {
+                    if (contentChunk.includes('<code>') || contentChunk.includes('```python') || (contentChunk.includes('```') && !contentChunk.includes('```markdown'))) {
+                      isInsideCode = true;
+                      const marker = contentChunk.includes('<code>') ? '<code>' : (contentChunk.includes('```python') ? '```python' : '```');
+                      const parts = contentChunk.split(marker);
+                      if (parts[0]) {
+                        onToken?.({ type: 'thinking', token: parts[0], count: tokenIndex });
+                      }
+                      onToken?.({ type: 'code', token: marker + (parts.slice(1).join(marker) || ''), count: tokenIndex });
+                    } else {
+                      // Everything before code is hypothesis, rationale, or thinking tags
+                      onToken?.({ type: 'thinking', token: contentChunk, count: tokenIndex });
                     }
                   } else {
-                    onToken?.({ type: 'content', token: contentChunk });
+                    // Inside code block
+                    onToken?.({ type: 'code', token: contentChunk, count: tokenIndex });
+                    if (contentChunk.includes('</code>') || (contentChunk.includes('```') && !contentChunk.includes('```python'))) {
+                      isInsideCode = false;
+                    }
                   }
                 }
               } catch (parseErr) {
@@ -151,8 +169,10 @@ ${history.length > 0 ? history.map(h => `- Iteration #${h.iteration} [${h.status
           }
         }
 
+        clearTimeout(timeoutId);
         return this.parseResponse(fullContent, fullReasoning);
       } catch (err) {
+        clearTimeout(timeoutId);
         attempt++;
         if (attempt >= this.maxRetries) throw err;
         const waitSec = Math.min(30, Math.pow(2, attempt) * 2);
