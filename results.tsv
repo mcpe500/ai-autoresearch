@@ -1,0 +1,2 @@
+iteration	commit	bpw	degradation_pct	pareto_score	compression_ratio	duration_sec	status	hypothesis
+0	baseline	0.5609	73.9928	17.9602	28.52x	3.10	KEEP	Initial low-rank binary factor baseline
