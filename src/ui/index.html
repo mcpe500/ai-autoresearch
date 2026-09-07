@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AutoResearch // Universal Neural Quantizer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: { 400: '#38bdf8', 500: '#0ea5e9', 600: '#0284c7' },
+            darkBg: '#090d16',
+            cardBg: '#111827',
+            borderCol: '#1f293d'
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { background-color: #090d16; color: #e2e8f0; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
+    .term-font { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #090d16; }
+    ::-webkit-scrollbar-thumb { background: #1f293d; border-radius: 3px; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+  <!-- Top Navigation Bar -->
+  <header class="border-b border-borderCol bg-cardBg/80 backdrop-blur sticky top-0 z-40 px-4 py-3">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center space-x-3">
+        <div class="w-3 h-3 rounded-full bg-cyan-400 animate-pulse"></div>
+        <div>
+          <h1 class="text-sm font-bold tracking-wider text-cyan-400 uppercase">AutoResearch Engine</h1>
+          <p class="text-xs text-slate-400">Universal Sub-1-Bit Neural Quantizer // Model A</p>
+        </div>
+      </div>
+
+      <!-- Live Badges -->
+      <div class="flex flex-wrap items-center gap-2 text-xs">
+        <span id="runnerStatusBadge" class="px-2.5 py-1 rounded-full font-semibold uppercase bg-slate-800 text-slate-300 border border-slate-700">
+          IDLE
+        </span>
+        <div class="bg-slate-900 border border-borderCol px-3 py-1 rounded">
+          <span class="text-slate-400">Iter:</span> <span id="statIter" class="font-bold text-white">0</span>
+        </div>
+        <div class="bg-slate-900 border border-borderCol px-3 py-1 rounded">
+          <span class="text-slate-400">Best BPW:</span> <span id="statBpw" class="font-bold text-emerald-400">0.5609</span>
+        </div>
+        <div class="bg-slate-900 border border-borderCol px-3 py-1 rounded">
+          <span class="text-slate-400">Best Pareto:</span> <span id="statPareto" class="font-bold text-cyan-400">17.9602</span>
+        </div>
+        <div id="tunnelBadgeContainer" class="hidden bg-purple-950/60 border border-purple-800 text-purple-300 px-3 py-1 rounded flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-purple-400 animate-ping"></span>
+          <a id="tunnelLink" href="#" target="_blank" class="hover:underline font-mono text-[11px]">Cloudflare Tunnel</a>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex items-center gap-2">
+        <button id="btnStart" onclick="controlAction('start')" class="bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-3.5 py-1.5 rounded text-xs transition">
+          ▶ Start Loop
+        </button>
+        <button id="btnPause" onclick="controlAction('pause')" class="bg-amber-600 hover:bg-amber-500 text-white font-medium px-3 py-1.5 rounded text-xs transition">
+          ⏸ Pause
+        </button>
+        <button id="btnResume" onclick="controlAction('resume')" class="bg-cyan-600 hover:bg-cyan-500 text-white font-medium px-3 py-1.5 rounded text-xs transition">
+          ▶ Resume
+        </button>
+        <button id="btnStep" onclick="controlAction('step')" class="bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-3 py-1.5 rounded text-xs transition">
+          ⏭ Step
+        </button>
+        <button onclick="openSettingsModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-3 py-1.5 rounded text-xs transition">
+          ⚙ Settings
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Grid -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 space-y-6">
+    <!-- Row 1: Charts & Active Experiment -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <!-- Pareto Frontier Chart (7 cols) -->
+      <div class="lg:col-span-7 bg-cardBg border border-borderCol rounded-lg p-4 flex flex-col">
+        <div class="flex items-center justify-between mb-2">
+          <div>
+            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-300">Pareto Frontier: Rate vs Distortion</h2>
+            <p class="text-[11px] text-slate-500">Lower is better. Target: BPW &lt; 1.0 with minimal functional degradation.</p>
+          </div>
+          <span class="text-[10px] text-slate-400 bg-slate-900 border border-borderCol px-2 py-0.5 rounded">Live Plot</span>
+        </div>
+        <div class="relative flex-1 min-h-[260px]">
+          <canvas id="paretoChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Active Experiment & Streaming Terminal (5 cols) -->
+      <div class="lg:col-span-5 bg-cardBg border border-borderCol rounded-lg p-4 flex flex-col">
+        <div class="flex items-center justify-between mb-2 pb-2 border-b border-borderCol">
+          <div class="truncate">
+            <span class="text-[11px] uppercase tracking-wider text-cyan-400 font-bold">Current Hypothesis</span>
+            <p id="activeHypothesis" class="text-xs text-slate-200 truncate mt-0.5">Awaiting start...</p>
+          </div>
+          <button onclick="clearTerminal()" class="text-[10px] text-slate-500 hover:text-slate-300">Clear</button>
+        </div>
+        <div id="activeRationale" class="text-[11px] text-slate-400 italic mb-2 line-clamp-2"></div>
+        <div class="flex-1 bg-black/60 border border-slate-900 rounded p-2.5 overflow-y-auto max-h-[240px] term-font text-[11px] leading-relaxed text-slate-300" id="terminalLog">
+          <div class="text-slate-600">// Terminal ready. Connected to live research stream...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 2: Experiment History Table -->
+    <div class="bg-cardBg border border-borderCol rounded-lg p-4">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-xs font-bold uppercase tracking-wider text-slate-300">Experiment Log &amp; Pareto Progress</h2>
+          <p class="text-[11px] text-slate-500">All iterations committed, discarded, or crashed during continuous exploration.</p>
+        </div>
+        <button onclick="fetchExperiments()" class="text-xs text-slate-400 hover:text-white bg-slate-900 border border-borderCol px-2.5 py-1 rounded">
+          ↻ Refresh
+        </button>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="text-slate-500 uppercase border-b border-borderCol bg-slate-900/40">
+            <tr>
+              <th class="py-2.5 px-3">Iter</th>
+              <th class="py-2.5 px-3">Status</th>
+              <th class="py-2.5 px-3">Hypothesis</th>
+              <th class="py-2.5 px-3 text-right">BPW</th>
+              <th class="py-2.5 px-3 text-right">Degradation</th>
+              <th class="py-2.5 px-3 text-right">Pareto Score</th>
+              <th class="py-2.5 px-3 text-right">Comp Ratio</th>
+              <th class="py-2.5 px-3 text-right">Duration</th>
+              <th class="py-2.5 px-3 text-center">Action</th>
+            </tr>
+          </thead>
+          <tbody id="experimentsTableBody" class="divide-y divide-borderCol">
+            <tr>
+              <td colspan="9" class="py-4 text-center text-slate-500">Loading experiments...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <!-- Diff & Details Modal -->
+  <div id="diffModal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+    <div class="bg-cardBg border border-borderCol rounded-lg max-w-4xl w-full max-h-[85vh] flex flex-col shadow-2xl">
+      <div class="p-4 border-b border-borderCol flex items-center justify-between">
+        <div>
+          <h3 id="modalTitle" class="text-sm font-bold text-white">Experiment Details</h3>
+          <p id="modalSubtitle" class="text-xs text-slate-400 mt-0.5"></p>
+        </div>
+        <button onclick="closeDiffModal()" class="text-slate-400 hover:text-white text-lg">&times;</button>
+      </div>
+      <div class="p-4 overflow-y-auto space-y-4 flex-1">
+        <div>
+          <h4 class="text-xs uppercase font-bold text-slate-400 mb-1">Code Mutation Diff (train.py):</h4>
+          <pre id="modalDiff" class="bg-black/70 p-3 rounded text-[11px] term-font text-emerald-300 overflow-x-auto max-h-64 whitespace-pre-wrap"></pre>
+        </div>
+        <div>
+          <h4 class="text-xs uppercase font-bold text-slate-400 mb-1">Execution Stdout:</h4>
+          <pre id="modalStdout" class="bg-black/70 p-3 rounded text-[11px] term-font text-slate-300 overflow-x-auto max-h-48 whitespace-pre-wrap"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+    <div class="bg-cardBg border border-borderCol rounded-lg max-w-md w-full p-5 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-borderCol pb-2">
+        <h3 class="text-sm font-bold text-white uppercase tracking-wider">Harness Settings</h3>
+        <button onclick="closeSettingsModal()" class="text-slate-400 hover:text-white text-lg">&times;</button>
+      </div>
+      <form id="settingsForm" onsubmit="saveSettings(event)" class="space-y-3 text-xs">
+        <div>
+          <label class="block text-slate-400 mb-1">OpenAI / 9router Base URL</label>
+          <input type="text" id="cfgApiBase" class="w-full bg-slate-900 border border-borderCol rounded px-3 py-1.5 text-white" placeholder="https://api.9router.com/v1">
+        </div>
+        <div>
+          <label class="block text-slate-400 mb-1">API Key</label>
+          <input type="password" id="cfgApiKey" class="w-full bg-slate-900 border border-borderCol rounded px-3 py-1.5 text-white" placeholder="sk-...">
+        </div>
+        <div>
+          <label class="block text-slate-400 mb-1">Model Name</label>
+          <input type="text" id="cfgModel" class="w-full bg-slate-900 border border-borderCol rounded px-3 py-1.5 text-white" placeholder="claude-3-7-sonnet">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-slate-400 mb-1">Timeout (Seconds)</label>
+            <input type="number" id="cfgTimeout" class="w-full bg-slate-900 border border-borderCol rounded px-3 py-1.5 text-white" value="60">
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">VPS Nice Priority</label>
+            <input type="number" id="cfgNice" class="w-full bg-slate-900 border border-borderCol rounded px-3 py-1.5 text-white" value="10">
+          </div>
+        </div>
+        <div class="pt-2 flex justify-end gap-2">
+          <button type="button" onclick="closeSettingsModal()" class="bg-slate-800 text-slate-300 px-3 py-1.5 rounded">Cancel</button>
+          <button type="submit" class="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-1.5 rounded font-medium">Save Settings</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    let paretoChartInstance = null;
+    let eventSource = null;
+
+    // Initialize chart
+    function initChart() {
+      const ctx = document.getElementById('paretoChart').getContext('2d');
+      paretoChartInstance = new Chart(ctx, {
+        type: 'scatter',
+        data: {
+          datasets: [
+            {
+              label: 'Kept (Improved)',
+              data: [],
+              backgroundColor: '#10b981',
+              pointRadius: 6,
+              pointHoverRadius: 8,
+            },
+            {
+              label: 'Discarded',
+              data: [],
+              backgroundColor: '#64748b',
+              pointRadius: 4,
+            },
+            {
+              label: 'Crashed',
+              data: [],
+              backgroundColor: '#ef4444',
+              pointRadius: 4,
+              pointStyle: 'crossRot'
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: {
+              title: { display: true, text: 'Bits Per Weight (BPW)', color: '#94a3b8' },
+              grid: { color: '#1e293b' },
+              ticks: { color: '#94a3b8' }
+            },
+            y: {
+              title: { display: true, text: 'Functional Degradation (%)', color: '#94a3b8' },
+              grid: { color: '#1e293b' },
+              ticks: { color: '#94a3b8' }
+            }
+          },
+          plugins: {
+            legend: { labels: { color: '#94a3b8', boxWidth: 12 } },
+            tooltip: {
+              callbacks: {
+                label: function(ctx) {
+                  const p = ctx.raw;
+                  return `Iter ${p.iter}: BPW=${p.x}, Deg=${p.y}% (${p.hypo})`;
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // Connect Server-Sent Events (SSE)
+    function connectSSE() {
+      if (eventSource) eventSource.close();
+      eventSource = new EventSource('/api/events');
+
+      eventSource.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+          handleEvent(msg);
+        } catch (err) {}
+      };
+
+      eventSource.onerror = () => {
+        setTimeout(connectSSE, 3000);
+      };
+    }
+
+    function handleEvent(msg) {
+      const { event, data } = msg;
+
+      if (event === 'log' || event === 'stdout' || event === 'stderr') {
+        appendTerminal(typeof data === 'string' ? data : JSON.stringify(data));
+      } else if (event === 'status_change') {
+        updateStatusBadge(data.status);
+        if (data.iteration) document.getElementById('statIter').innerText = data.iteration;
+      } else if (event === 'hypothesis') {
+        document.getElementById('activeHypothesis').innerText = data.hypothesis;
+        document.getElementById('activeRationale').innerText = data.rationale || '';
+        document.getElementById('statIter').innerText = data.iteration;
+      } else if (event === 'experiment_completed') {
+        fetchStatus();
+        fetchExperiments();
+      }
+    }
+
+    function appendTerminal(text) {
+      const term = document.getElementById('terminalLog');
+      term.innerText += text + '\n';
+      term.scrollTop = term.scrollHeight;
+    }
+
+    function clearTerminal() {
+      document.getElementById('terminalLog').innerText = '';
+    }
+
+    function updateStatusBadge(status) {
+      const badge = document.getElementById('runnerStatusBadge');
+      badge.innerText = status;
+      badge.className = 'px-2.5 py-1 rounded-full font-semibold uppercase border text-xs ';
+      if (status === 'RUNNING_EXPERIMENT') badge.className += 'bg-emerald-950 text-emerald-400 border-emerald-800 animate-pulse';
+      else if (status === 'THINKING') badge.className += 'bg-cyan-950 text-cyan-400 border-cyan-800 animate-pulse';
+      else if (status === 'PAUSED') badge.className += 'bg-amber-950 text-amber-400 border-amber-800';
+      else badge.className += 'bg-slate-800 text-slate-300 border-slate-700';
+    }
+
+    async function fetchStatus() {
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+        updateStatusBadge(data.status);
+        document.getElementById('statIter').innerText = data.iteration;
+        document.getElementById('statBpw').innerText = data.best_bpw !== null ? data.best_bpw.toFixed(4) : '--';
+        document.getElementById('statPareto').innerText = data.best_pareto_score !== null ? data.best_pareto_score.toFixed(4) : '--';
+
+        if (data.tunnel_url) {
+          const container = document.getElementById('tunnelBadgeContainer');
+          const link = document.getElementById('tunnelLink');
+          link.href = data.tunnel_url;
+          link.innerText = data.tunnel_url.replace('https://', '');
+          container.classList.remove('hidden');
+        }
+      } catch (err) {}
+    }
+
+    async function fetchExperiments() {
+      try {
+        const res = await fetch('/api/experiments');
+        const list = await res.json();
+
+        // Update table
+        const tbody = document.getElementById('experimentsTableBody');
+        if (list.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="9" class="py-4 text-center text-slate-500">No experiments yet. Click Start Loop to begin!</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = list.map(exp => {
+          let statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-400">DISCARD</span>';
+          if (exp.status === 'KEEP') statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800">KEEP</span>';
+          if (exp.status === 'CRASH') statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-red-950 text-red-400 border border-red-800">CRASH</span>';
+
+          return `
+            <tr class="hover:bg-slate-900/50">
+              <td class="py-2 px-3 font-mono text-slate-400">#${exp.iteration}</td>
+              <td class="py-2 px-3">${statusBadge}</td>
+              <td class="py-2 px-3 max-w-xs truncate text-slate-200" title="${exp.hypothesis}">${exp.hypothesis}</td>
+              <td class="py-2 px-3 text-right font-mono text-emerald-400">${exp.bpw !== null ? exp.bpw.toFixed(4) : '--'}</td>
+              <td class="py-2 px-3 text-right font-mono text-amber-400">${exp.degradation_pct !== null ? exp.degradation_pct.toFixed(2) + '%' : '--'}</td>
+              <td class="py-2 px-3 text-right font-mono font-bold text-cyan-400">${exp.pareto_score !== null ? exp.pareto_score.toFixed(4) : '--'}</td>
+              <td class="py-2 px-3 text-right font-mono text-slate-400">${exp.compression_ratio ? exp.compression_ratio + 'x' : '--'}</td>
+              <td class="py-2 px-3 text-right text-slate-500">${exp.duration_sec ? exp.duration_sec + 's' : '--'}</td>
+              <td class="py-2 px-3 text-center">
+                <button onclick="viewDetails(${exp.id})" class="text-cyan-400 hover:text-cyan-300 underline text-[11px]">Diff</button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+
+        // Update chart
+        const kept = [];
+        const discarded = [];
+        const crashed = [];
+
+        list.forEach(e => {
+          if (e.bpw !== null && e.degradation_pct !== null) {
+            const point = { x: e.bpw, y: e.degradation_pct, iter: e.iteration, hypo: e.hypothesis.slice(0, 30) };
+            if (e.status === 'KEEP') kept.push(point);
+            else if (e.status === 'DISCARD') discarded.push(point);
+            else crashed.push(point);
+          }
+        });
+
+        paretoChartInstance.data.datasets[0].data = kept;
+        paretoChartInstance.data.datasets[1].data = discarded;
+        paretoChartInstance.data.datasets[2].data = crashed;
+        paretoChartInstance.update();
+      } catch (err) {}
+    }
+
+    async function controlAction(action) {
+      await fetch(`/api/control/${action}`, { method: 'POST' });
+      fetchStatus();
+    }
+
+    async function viewDetails(id) {
+      const res = await fetch(`/api/experiments/${id}`);
+      const exp = await res.json();
+      document.getElementById('modalTitle').innerText = `Experiment #${exp.iteration} Details`;
+      document.getElementById('modalSubtitle').innerText = exp.hypothesis;
+      document.getElementById('modalDiff').innerText = exp.code_diff || '// No diff recorded.';
+      document.getElementById('modalStdout').innerText = exp.stdout || exp.stderr || '// No execution output.';
+      document.getElementById('diffModal').classList.remove('hidden');
+    }
+
+    function closeDiffModal() {
+      document.getElementById('diffModal').classList.add('hidden');
+    }
+
+    async function openSettingsModal() {
+      const res = await fetch('/api/config');
+      const cfg = await res.json();
+      document.getElementById('cfgApiBase').value = cfg.OPENAI_API_BASE || '';
+      document.getElementById('cfgApiKey').value = cfg.OPENAI_API_KEY || '';
+      document.getElementById('cfgModel').value = cfg.MODEL_NAME || '';
+      document.getElementById('cfgTimeout').value = cfg.EXPERIMENT_TIMEOUT_SEC || 60;
+      document.getElementById('cfgNice').value = cfg.PROCESS_NICE || 10;
+      document.getElementById('settingsModal').classList.remove('hidden');
+    }
+
+    function closeSettingsModal() {
+      document.getElementById('settingsModal').classList.add('hidden');
+    }
+
+    async function saveSettings(e) {
+      e.preventDefault();
+      const payload = {
+        OPENAI_API_BASE: document.getElementById('cfgApiBase').value,
+        OPENAI_API_KEY: document.getElementById('cfgApiKey').value,
+        MODEL_NAME: document.getElementById('cfgModel').value,
+        EXPERIMENT_TIMEOUT_SEC: parseInt(document.getElementById('cfgTimeout').value, 10),
+        PROCESS_NICE: parseInt(document.getElementById('cfgNice').value, 10),
+      };
+      await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      closeSettingsModal();
+      alert('Settings saved to .env!');
+    }
+
+    // Auto-init
+    window.addEventListener('DOMContentLoaded', () => {
+      initChart();
+      fetchStatus();
+      fetchExperiments();
+      connectSSE();
+      setInterval(fetchStatus, 5000);
+    });
+  </script>
+</body>
+</html>

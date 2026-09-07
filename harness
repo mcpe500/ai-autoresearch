@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -e
+
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if command -v bun >/dev/null 2>&1; then
+    exec bun run "$DIR/src/index.js" "$@"
+elif command -v node >/dev/null 2>&1; then
+    exec node "$DIR/src/index.js" "$@"
+else
+    echo "[Error] Neither bun nor node was found in PATH!" >&2
+    echo "Please install Bun (curl -fsSL https://bun.sh/install | bash) or Node.js (v20+)." >&2
+    exit 1
+fi

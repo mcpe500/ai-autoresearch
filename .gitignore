@@ -29,3 +29,4 @@ cloudflared
 scratch/
 tmp/
 *.tmp
+*.bun-build
